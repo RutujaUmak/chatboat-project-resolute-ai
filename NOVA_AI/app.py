@@ -1,8 +1,6 @@
 import base64
 import io
 import json
-import os
-import re
 from datetime import datetime
 
 import pandas as pd
@@ -26,53 +24,40 @@ st.set_page_config(
 
 
 # ============================================================
-# CUSTOM CSS
+# CSS
 # ============================================================
 
 st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(135deg, #0b1020 0%, #111827 50%, #172554 100%);
+        background: linear-gradient(
+            135deg,
+            #0b1020 0%,
+            #111827 50%,
+            #172554 100%
+        );
     }
 
-    .main-title {
+    .nova-title {
+        text-align: center;
         font-size: 3rem;
         font-weight: 800;
-        text-align: center;
-        margin-bottom: 0.2rem;
+        margin-top: 10px;
     }
 
-    .subtitle {
+    .nova-subtitle {
         text-align: center;
         color: #9ca3af;
-        margin-bottom: 2rem;
+        margin-bottom: 25px;
     }
 
-    .status-box {
-        padding: 12px 16px;
-        border-radius: 12px;
-        margin: 8px 0;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.10);
-    }
-
-    .feature-card {
+    .card {
         padding: 18px;
         border-radius: 16px;
         background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.08);
-        margin-bottom: 10px;
-    }
-
-    .small-text {
-        color: #9ca3af;
-        font-size: 0.85rem;
-    }
-
-    div[data-testid="stChatMessage"] {
-        border-radius: 16px;
-        margin-bottom: 10px;
+        border: 1px solid rgba(255,255,255,0.10);
+        margin-bottom: 12px;
     }
     </style>
     """,
@@ -81,7 +66,7 @@ st.markdown(
 
 
 # ============================================================
-# OLLAMA CONFIGURATION
+# OLLAMA CONFIG
 # ============================================================
 
 try:
@@ -90,8 +75,14 @@ except Exception:
     OLLAMA_API_KEY = ""
 
 OLLAMA_BASE_URL = "https://ollama.com"
-OLLAMA_TAGS_URL = f"{OLLAMA_BASE_URL}/api/tags"
-OLLAMA_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
+
+OLLAMA_TAGS_URL = (
+    f"{OLLAMA_BASE_URL}/api/tags"
+)
+
+OLLAMA_CHAT_URL = (
+    f"{OLLAMA_BASE_URL}/api/chat"
+)
 
 
 # ============================================================
@@ -101,30 +92,27 @@ OLLAMA_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "uploaded_context" not in st.session_state:
-    st.session_state.uploaded_context = ""
-
-if "uploaded_files" not in st.session_state:
-    st.session_state.uploaded_files = []
+if "document_context" not in st.session_state:
+    st.session_state.document_context = ""
 
 if "ocr_text" not in st.session_state:
     st.session_state.ocr_text = ""
 
-if "image_data" not in st.session_state:
-    st.session_state.image_data = None
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = None
 
-if "image_name" not in st.session_state:
-    st.session_state.image_name = ""
+if "free_models" not in st.session_state:
+    st.session_state.free_models = []
 
-if "last_response" not in st.session_state:
-    st.session_state.last_response = ""
+if "paid_models" not in st.session_state:
+    st.session_state.paid_models = []
 
 
 # ============================================================
-# HELPER: API HEADERS
+# HEADERS
 # ============================================================
 
-def get_headers():
+def ollama_headers():
     return {
         "Authorization": f"Bearer {OLLAMA_API_KEY}",
         "Content-Type": "application/json",
@@ -133,252 +121,179 @@ def get_headers():
 
 
 # ============================================================
-# GET OLLAMA CLOUD MODELS
+# GET MODELS
 # ============================================================
 
 @st.cache_data(ttl=300)
-def get_ollama_models():
-    """
-    Automatically gets models available to the Ollama Cloud account.
-    This prevents the 'llama3.2:latest not found' problem.
-    """
+def get_models():
 
     if not OLLAMA_API_KEY:
-        return [], "API key is missing."
+        return [], "API key missing."
 
     try:
+
         response = requests.get(
             OLLAMA_TAGS_URL,
-            headers=get_headers(),
+            headers=ollama_headers(),
             timeout=30,
         )
 
         if response.status_code != 200:
             return [], (
-                f"Ollama model request failed "
-                f"({response.status_code}): {response.text}"
-            )
-
-        data = response.json()
-
-        models = []
-
-        for model in data.get("models", []):
-            name = model.get("name")
-
-            if name and name not in models:
-                models.append(name)
-
-        return models, ""
-
-    except requests.exceptions.RequestException as e:
-        return [], f"Connection error: {str(e)}"
-
-    except Exception as e:
-        return [], f"Unexpected error: {str(e)}"
-
-
-# ============================================================
-# TEXT EXTRACTION
-# ============================================================
-
-def extract_pdf_text(file):
-    try:
-        reader = PdfReader(file)
-        pages = []
-
-        for page in reader.pages:
-            text = page.extract_text() or ""
-            pages.append(text)
-
-        return "\n".join(pages).strip()
-
-    except Exception as e:
-        return f"[PDF extraction error: {e}]"
-
-
-def extract_docx_text(file):
-    try:
-        document = Document(file)
-
-        paragraphs = [
-            paragraph.text
-            for paragraph in document.paragraphs
-            if paragraph.text.strip()
-        ]
-
-        return "\n".join(paragraphs).strip()
-
-    except Exception as e:
-        return f"[DOCX extraction error: {e}]"
-
-
-def extract_text_from_file(uploaded_file):
-    filename = uploaded_file.name.lower()
-
-    try:
-        if filename.endswith(".pdf"):
-            return extract_pdf_text(uploaded_file)
-
-        if filename.endswith(".docx"):
-            return extract_docx_text(uploaded_file)
-
-        if filename.endswith((".txt", ".md")):
-            return uploaded_file.getvalue().decode(
-                "utf-8",
-                errors="ignore",
-            )
-
-        if filename.endswith(".json"):
-            raw = uploaded_file.getvalue().decode(
-                "utf-8",
-                errors="ignore",
-            )
-
-            data = json.loads(raw)
-
-            return json.dumps(
-                data,
-                indent=2,
-                ensure_ascii=False,
-            )
-
-        if filename.endswith(".csv"):
-            dataframe = pd.read_csv(uploaded_file)
-
-            return dataframe.to_csv(
-                index=False
-            )
-
-        return ""
-
-    except Exception as e:
-        return f"[File reading error: {e}]"
-
-
-# ============================================================
-# OCR
-# ============================================================
-
-def perform_ocr(image):
-    try:
-        import pytesseract
-
-        text = pytesseract.image_to_string(image)
-
-        return text.strip()
-
-    except Exception as e:
-        return f"OCR error: {e}"
-
-
-# ============================================================
-# IMAGE TO BASE64
-# ============================================================
-
-def image_to_base64(image):
-    buffer = io.BytesIO()
-
-    image.save(
-        buffer,
-        format="JPEG",
-        quality=90,
-    )
-
-    return base64.b64encode(
-        buffer.getvalue()
-    ).decode("utf-8")
-
-
-# ============================================================
-# IMAGE SUMMARY
-# ============================================================
-
-def analyze_image(model, image, instruction):
-    """
-    Sends image + instruction to Ollama.
-
-    This works only when the selected Ollama model supports
-    image/vision input.
-    """
-
-    if not OLLAMA_API_KEY:
-        return "Ollama API key is missing."
-
-    try:
-        image_base64 = image_to_base64(image)
-
-        payload = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": instruction,
-                    "images": [image_base64],
-                }
-            ],
-            "stream": False,
-        }
-
-        response = requests.post(
-            OLLAMA_CHAT_URL,
-            headers=get_headers(),
-            json=payload,
-            timeout=120,
-        )
-
-        if response.status_code != 200:
-            return (
-                f"Ollama image API error "
+                f"Ollama returned "
                 f"{response.status_code}: "
                 f"{response.text}"
             )
 
         data = response.json()
 
-        return (
-            data.get("message", {})
-            .get("content", "")
-            .strip()
-        )
+        models = []
 
-    except requests.exceptions.RequestException as e:
-        return f"Image API connection error: {e}"
+        for item in data.get("models", []):
+
+            name = item.get("name")
+
+            if name and name not in models:
+                models.append(name)
+
+        return models, ""
 
     except Exception as e:
-        return f"Image analysis error: {e}"
+
+        return [], str(e)
 
 
 # ============================================================
-# CHAT WITH OLLAMA
+# TEST MODEL
 # ============================================================
 
-def chat_with_ollama(
+def test_model(model):
+
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": "Reply only with OK."
+            }
+        ],
+        "stream": False,
+    }
+
+    try:
+
+        response = requests.post(
+            OLLAMA_CHAT_URL,
+            headers=ollama_headers(),
+            json=payload,
+            timeout=60,
+        )
+
+        if response.status_code == 200:
+
+            data = response.json()
+
+            answer = (
+                data.get("message", {})
+                .get("content", "")
+            )
+
+            if answer:
+                return True, ""
+
+            return False, "Empty response."
+
+        if response.status_code == 402:
+
+            return (
+                False,
+                "Paid model / credits required."
+            )
+
+        if response.status_code == 404:
+
+            return (
+                False,
+                "Model not found."
+            )
+
+        return (
+            False,
+            f"HTTP {response.status_code}"
+        )
+
+    except Exception as e:
+
+        return False, str(e)
+
+
+# ============================================================
+# FIND FREE MODEL
+# ============================================================
+
+def find_free_models(models):
+
+    free_models = []
+    paid_models = []
+
+    for model in models:
+
+        success, error = test_model(model)
+
+        if success:
+            free_models.append(model)
+
+        elif "Paid model" in error:
+            paid_models.append(model)
+
+    return free_models, paid_models
+
+
+# ============================================================
+# CHAT
+# ============================================================
+
+def ask_ollama(
     model,
     messages,
     temperature,
 ):
-    if not OLLAMA_API_KEY:
-        return "❌ Ollama API key is missing."
 
     payload = {
         "model": model,
         "messages": messages,
         "stream": False,
         "options": {
-            "temperature": temperature,
+            "temperature": temperature
         },
     }
 
     try:
+
         response = requests.post(
             OLLAMA_CHAT_URL,
-            headers=get_headers(),
+            headers=ollama_headers(),
             json=payload,
             timeout=180,
         )
 
+        if response.status_code == 402:
+
+            return (
+                "❌ This model requires paid Ollama "
+                "usage credits. Please select a "
+                "free model."
+            )
+
+        if response.status_code == 404:
+
+            return (
+                "❌ This model is not available. "
+                "Please refresh the model list."
+            )
+
         if response.status_code != 200:
+
             return (
                 f"❌ Ollama API error "
                 f"{response.status_code}: "
@@ -393,42 +308,256 @@ def chat_with_ollama(
         )
 
         if not answer:
+
             return "❌ Ollama returned an empty response."
 
         return answer.strip()
 
     except requests.exceptions.Timeout:
-        return "❌ Ollama request timed out. Please try again."
 
-    except requests.exceptions.RequestException as e:
-        return f"❌ Network error: {e}"
+        return (
+            "❌ Request timed out. "
+            "Please try again."
+        )
 
     except Exception as e:
-        return f"❌ Unexpected error: {e}"
+
+        return f"❌ Connection error: {e}"
+
+
+# ============================================================
+# PDF
+# ============================================================
+
+def read_pdf(file):
+
+    try:
+
+        reader = PdfReader(file)
+
+        text = []
+
+        for page in reader.pages:
+
+            page_text = page.extract_text()
+
+            if page_text:
+                text.append(page_text)
+
+        return "\n".join(text)
+
+    except Exception as e:
+
+        return f"PDF error: {e}"
+
+
+# ============================================================
+# DOCX
+# ============================================================
+
+def read_docx(file):
+
+    try:
+
+        document = Document(file)
+
+        text = []
+
+        for paragraph in document.paragraphs:
+
+            if paragraph.text.strip():
+                text.append(paragraph.text)
+
+        return "\n".join(text)
+
+    except Exception as e:
+
+        return f"DOCX error: {e}"
+
+
+# ============================================================
+# FILE EXTRACTION
+# ============================================================
+
+def read_file(file):
+
+    name = file.name.lower()
+
+    try:
+
+        if name.endswith(".pdf"):
+            return read_pdf(file)
+
+        if name.endswith(".docx"):
+            return read_docx(file)
+
+        if name.endswith(".txt"):
+
+            return file.getvalue().decode(
+                "utf-8",
+                errors="ignore"
+            )
+
+        if name.endswith(".md"):
+
+            return file.getvalue().decode(
+                "utf-8",
+                errors="ignore"
+            )
+
+        if name.endswith(".json"):
+
+            data = json.loads(
+                file.getvalue().decode(
+                    "utf-8",
+                    errors="ignore"
+                )
+            )
+
+            return json.dumps(
+                data,
+                indent=2,
+                ensure_ascii=False
+            )
+
+        if name.endswith(".csv"):
+
+            df = pd.read_csv(file)
+
+            return df.to_csv(index=False)
+
+        return ""
+
+    except Exception as e:
+
+        return f"File error: {e}"
+
+
+# ============================================================
+# OCR
+# ============================================================
+
+def run_ocr(image):
+
+    try:
+
+        import pytesseract
+
+        result = pytesseract.image_to_string(
+            image
+        )
+
+        return result.strip()
+
+    except Exception as e:
+
+        return f"OCR error: {e}"
+
+
+# ============================================================
+# IMAGE BASE64
+# ============================================================
+
+def image_base64(image):
+
+    buffer = io.BytesIO()
+
+    image.save(
+        buffer,
+        format="JPEG"
+    )
+
+    return base64.b64encode(
+        buffer.getvalue()
+    ).decode("utf-8")
+
+
+# ============================================================
+# IMAGE ANALYSIS
+# ============================================================
+
+def analyze_image(
+    model,
+    image,
+    question
+):
+
+    image_data = image_base64(image)
+
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": question,
+                "images": [image_data],
+            }
+        ],
+        "stream": False,
+    }
+
+    try:
+
+        response = requests.post(
+            OLLAMA_CHAT_URL,
+            headers=ollama_headers(),
+            json=payload,
+            timeout=180,
+        )
+
+        if response.status_code == 402:
+
+            return (
+                "❌ This model requires paid "
+                "usage credits."
+            )
+
+        if response.status_code != 200:
+
+            return (
+                f"❌ Image API error "
+                f"{response.status_code}: "
+                f"{response.text}"
+            )
+
+        data = response.json()
+
+        return (
+            data.get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+    except Exception as e:
+
+        return f"❌ Image analysis error: {e}"
 
 
 # ============================================================
 # TEXT TO SPEECH
 # ============================================================
 
-def text_to_speech(text):
+def make_speech(text):
+
     try:
+
         from gtts import gTTS
 
-        audio_buffer = io.BytesIO()
+        audio = io.BytesIO()
 
-        tts = gTTS(
+        speech = gTTS(
             text=text,
-            lang="en",
+            lang="en"
         )
 
-        tts.write_to_fp(audio_buffer)
+        speech.write_to_fp(audio)
 
-        audio_buffer.seek(0)
+        audio.seek(0)
 
-        return audio_buffer
+        return audio
 
     except Exception:
+
         return None
 
 
@@ -437,24 +566,36 @@ def text_to_speech(text):
 # ============================================================
 
 def voice_to_text(audio_file):
+
     try:
+
         import speech_recognition as sr
 
         recognizer = sr.Recognizer()
 
         audio_bytes = audio_file.read()
 
-        with io.BytesIO(audio_bytes) as audio_stream:
+        audio_stream = io.BytesIO(
+            audio_bytes
+        )
 
-            with sr.AudioFile(audio_stream) as source:
-                audio = recognizer.record(source)
+        with sr.AudioFile(
+            audio_stream
+        ) as source:
 
-        text = recognizer.recognize_google(audio)
+            audio = recognizer.record(
+                source
+            )
 
-        return text
+        return recognizer.recognize_google(
+            audio
+        )
 
     except Exception as e:
-        return f"Voice recognition error: {e}"
+
+        return (
+            f"Voice recognition error: {e}"
+        )
 
 
 # ============================================================
@@ -465,130 +606,182 @@ with st.sidebar:
 
     st.markdown("## 🤖 NOVA AI")
 
-    st.markdown(
-        '<div class="small-text">Your intelligent AI workspace</div>',
-        unsafe_allow_html=True,
+    st.caption(
+        "Free Ollama Cloud AI Assistant"
     )
 
     st.divider()
 
-    # API STATUS
-
     if OLLAMA_API_KEY:
-        st.success("🟢 Ollama API configured")
+
+        st.success(
+            "🟢 Ollama API Connected"
+        )
+
     else:
-        st.error("🔴 Ollama API key missing")
+
+        st.error(
+            "🔴 Ollama API Key Missing"
+        )
 
         st.info(
             """
-            Add this to Streamlit Secrets:
+Add this in Streamlit Secrets:
 
-            [ollama]
-            api_key = "YOUR_API_KEY"
-            """
+[ollama]
+api_key = "YOUR_API_KEY"
+"""
         )
 
-    # MODEL LOADING
-
-    if OLLAMA_API_KEY:
-
-        with st.spinner("Loading Ollama models..."):
-            available_models, model_error = get_ollama_models()
-
-        if available_models:
-
-            selected_model = st.selectbox(
-                "🤖 Ollama Model",
-                available_models,
-                index=0,
-            )
-
-        else:
-
-            st.error(
-                "❌ No models available."
-            )
-
-            if model_error:
-                st.caption(model_error)
-
-            st.stop()
-
-    else:
         st.stop()
 
-    # TEMPERATURE
+    # --------------------------------------------------------
+    # MODEL DISCOVERY
+    # --------------------------------------------------------
+
+    with st.spinner(
+        "Finding available models..."
+    ):
+
+        all_models, model_error = get_models()
+
+    if not all_models:
+
+        st.error(
+            "❌ No Ollama models found."
+        )
+
+        if model_error:
+            st.caption(model_error)
+
+        st.stop()
+
+    # --------------------------------------------------------
+    # FREE MODEL CHECK
+    # --------------------------------------------------------
+
+    if not st.session_state.free_models:
+
+        with st.spinner(
+            "Checking model access..."
+        ):
+
+            free_models, paid_models = (
+                find_free_models(
+                    all_models
+                )
+            )
+
+            st.session_state.free_models = (
+                free_models
+            )
+
+            st.session_state.paid_models = (
+                paid_models
+            )
+
+    free_models = (
+        st.session_state.free_models
+    )
+
+    if free_models:
+
+        st.success(
+            f"🆓 {len(free_models)} free model(s) found"
+        )
+
+        selected_model = st.selectbox(
+            "🤖 Free Model",
+            free_models,
+        )
+
+    else:
+
+        st.error(
+            "❌ No free model is available "
+            "for your Ollama account."
+        )
+
+        st.warning(
+            """
+Ollama returned 402 for the available
+models.
+
+This is an Ollama account/plan limitation.
+Changing Python code cannot bypass it.
+"""
+        )
+
+        st.markdown(
+            "### Models detected"
+        )
+
+        for model in all_models:
+
+            st.write(
+                f"• {model}"
+            )
+
+        st.stop()
+
+    # --------------------------------------------------------
+    # SETTINGS
+    # --------------------------------------------------------
 
     temperature = st.slider(
         "🌡️ Creativity",
-        min_value=0.0,
-        max_value=1.5,
-        value=0.7,
-        step=0.1,
+        0.0,
+        1.5,
+        0.7,
+        0.1
     )
 
     st.divider()
-
-    # NEW CHAT
 
     if st.button(
         "➕ New Chat",
-        use_container_width=True,
+        use_container_width=True
     ):
+
         st.session_state.messages = []
-        st.session_state.uploaded_context = ""
-        st.session_state.uploaded_files = []
-        st.session_state.ocr_text = ""
-        st.session_state.image_data = None
-        st.session_state.image_name = ""
-        st.session_state.last_response = ""
 
         st.rerun()
 
-    # CLEAR CHAT
-
     if st.button(
         "🗑️ Clear Chat",
-        use_container_width=True,
+        use_container_width=True
     ):
+
         st.session_state.messages = []
-        st.session_state.last_response = ""
 
         st.rerun()
 
     st.divider()
 
-    # FEATURES
-
     st.markdown("### ✨ Features")
 
-    st.markdown(
-        """
-        <div class="feature-card">
-        💬 AI Chat<br>
-        📄 Document Analysis<br>
-        🔍 OCR<br>
-        🖼️ Image Understanding<br>
-        🎤 Voice Input<br>
-        🔊 Text-to-Speech<br>
-        📥 Download Chat
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.write("💬 AI Chat")
+    st.write("📄 PDF / DOCX / TXT")
+    st.write("📊 CSV / JSON")
+    st.write("🔍 OCR")
+    st.write("🖼️ Image Analysis")
+    st.write("🎤 Voice Input")
+    st.write("🔊 Text-to-Speech")
 
 
 # ============================================================
-# MAIN HEADER
+# HEADER
 # ============================================================
 
 st.markdown(
-    '<div class="main-title">🤖 NOVA AI</div>',
+    '<div class="nova-title">🤖 NOVA AI</div>',
     unsafe_allow_html=True,
 )
 
 st.markdown(
-    '<div class="subtitle">Your intelligent AI assistant</div>',
+    '<div class="nova-subtitle">'
+    'Your intelligent AI workspace'
+    '</div>',
     unsafe_allow_html=True,
 )
 
@@ -597,13 +790,15 @@ st.markdown(
 # TABS
 # ============================================================
 
-chat_tab, files_tab, image_tab, voice_tab = st.tabs(
-    [
-        "💬 Chat",
-        "📄 Documents",
-        "🖼️ Image & OCR",
-        "🎤 Voice",
-    ]
+chat_tab, document_tab, image_tab, voice_tab = (
+    st.tabs(
+        [
+            "💬 Chat",
+            "📄 Documents",
+            "🖼️ Image & OCR",
+            "🎤 Voice",
+        ]
+    )
 )
 
 
@@ -611,12 +806,14 @@ chat_tab, files_tab, image_tab, voice_tab = st.tabs(
 # DOCUMENT TAB
 # ============================================================
 
-with files_tab:
+with document_tab:
 
-    st.subheader("📄 Upload Documents")
+    st.subheader(
+        "📄 Document Analysis"
+    )
 
-    uploaded_files = st.file_uploader(
-        "Upload PDF, DOCX, TXT, CSV, MD or JSON",
+    files = st.file_uploader(
+        "Upload your documents",
         type=[
             "pdf",
             "docx",
@@ -628,54 +825,44 @@ with files_tab:
         accept_multiple_files=True,
     )
 
-    if uploaded_files:
+    if files:
 
-        all_text = []
+        extracted = []
 
-        st.session_state.uploaded_files = [
-            file.name for file in uploaded_files
-        ]
+        for file in files:
 
-        for file in uploaded_files:
+            text = read_file(file)
 
-            text = extract_text_from_file(file)
+            extracted.append(
+                f"\n===== {file.name} =====\n"
+                f"{text}"
+            )
 
-            if text:
-
-                all_text.append(
-                    f"\n\n===== {file.name} =====\n\n{text}"
-                )
-
-        st.session_state.uploaded_context = (
-            "\n".join(all_text)
+        st.session_state.document_context = (
+            "\n".join(extracted)
         )
 
         st.success(
-            f"✅ {len(uploaded_files)} file(s) processed."
+            f"✅ {len(files)} file(s) processed."
         )
 
-        st.info(
-            "You can now ask questions about these documents in the Chat tab."
-        )
-
-        with st.expander("👀 Preview extracted text"):
-
-            preview = st.session_state.uploaded_context
-
-            if len(preview) > 15000:
-                preview = preview[:15000] + "\n\n[Preview truncated]"
+        with st.expander(
+            "👀 View extracted text"
+        ):
 
             st.text_area(
-                "Extracted content",
-                preview,
-                height=400,
+                "Document content",
+                st.session_state.document_context[
+                    :20000
+                ],
+                height=400
             )
 
         st.download_button(
             "📥 Download Extracted Text",
-            data=st.session_state.uploaded_context,
-            file_name="nova_extracted_text.txt",
-            mime="text/plain",
+            st.session_state.document_context,
+            "nova_documents.txt",
+            "text/plain",
         )
 
 
@@ -685,9 +872,11 @@ with files_tab:
 
 with image_tab:
 
-    st.subheader("🖼️ Image Understanding + OCR")
+    st.subheader(
+        "🖼️ Image Understanding & OCR"
+    )
 
-    uploaded_image = st.file_uploader(
+    image_file = st.file_uploader(
         "Upload an image",
         type=[
             "png",
@@ -695,87 +884,95 @@ with image_tab:
             "jpeg",
             "webp",
         ],
-        key="image_uploader",
+        key="nova_image"
     )
 
-    if uploaded_image:
+    if image_file:
 
-        image = Image.open(uploaded_image)
+        image = Image.open(
+            image_file
+        )
 
-        st.session_state.image_name = uploaded_image.name
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.image(
-                image,
-                caption=uploaded_image.name,
-                use_container_width=True,
-            )
-
-        with col2:
-
-            st.markdown("### 🔍 OCR")
-
-            if st.button(
-                "Extract Text",
-                use_container_width=True,
-            ):
-
-                with st.spinner("Running OCR..."):
-
-                    ocr_result = perform_ocr(image)
-
-                st.session_state.ocr_text = ocr_result
-
-            if st.session_state.ocr_text:
-
-                st.text_area(
-                    "Detected Text",
-                    st.session_state.ocr_text,
-                    height=250,
-                )
-
-                st.download_button(
-                    "📥 Download OCR Text",
-                    data=st.session_state.ocr_text,
-                    file_name="nova_ocr.txt",
-                    mime="text/plain",
-                )
+        st.image(
+            image,
+            caption=image_file.name,
+            use_container_width=True
+        )
 
         st.divider()
 
-        st.markdown("### 🧠 AI Image Analysis")
+        # OCR
 
-        image_instruction = st.text_area(
-            "What should NOVA AI do with this image?",
+        st.markdown("### 🔍 OCR")
+
+        if st.button(
+            "Extract Text from Image",
+            use_container_width=True
+        ):
+
+            with st.spinner(
+                "Running OCR..."
+            ):
+
+                ocr_result = run_ocr(
+                    image
+                )
+
+            st.session_state.ocr_text = (
+                ocr_result
+            )
+
+        if st.session_state.ocr_text:
+
+            st.text_area(
+                "OCR Result",
+                st.session_state.ocr_text,
+                height=250
+            )
+
+            st.download_button(
+                "📥 Download OCR",
+                st.session_state.ocr_text,
+                "nova_ocr.txt",
+                "text/plain"
+            )
+
+        st.divider()
+
+        # IMAGE AI
+
+        st.markdown(
+            "### 🧠 AI Image Analysis"
+        )
+
+        image_question = st.text_area(
+            "Ask about the image",
             value=(
                 "Describe this image in detail. "
-                "Identify the important objects, text, "
-                "layout, and overall meaning."
+                "Identify important objects, text, "
+                "and the overall meaning."
             ),
-            height=100,
+            height=100
         )
 
         if st.button(
             "✨ Analyze Image",
-            use_container_width=True,
+            use_container_width=True
         ):
 
             with st.spinner(
-                "NOVA AI is analyzing the image..."
+                "Analyzing image..."
             ):
 
-                image_answer = analyze_image(
+                result = analyze_image(
                     selected_model,
                     image,
-                    image_instruction,
+                    image_question
                 )
 
             st.markdown("### 🤖 NOVA AI")
 
-            st.write(image_answer)
+            st.write(result)
 
 
 # ============================================================
@@ -784,66 +981,52 @@ with image_tab:
 
 with voice_tab:
 
-    st.subheader("🎤 Voice Assistant")
-
-    st.write(
-        "Record your question and NOVA AI will convert it to text."
+    st.subheader(
+        "🎤 Voice Assistant"
     )
 
-    audio_value = st.audio_input(
-        "🎤 Record your voice"
+    audio = st.audio_input(
+        "Record your question"
     )
 
-    if audio_value:
+    if audio:
 
-        st.audio(
-            audio_value
-        )
+        st.audio(audio)
 
         if st.button(
-            "📝 Convert Voice to Text",
-            use_container_width=True,
+            "📝 Convert to Text",
+            use_container_width=True
         ):
 
             with st.spinner(
-                "Converting speech to text..."
+                "Converting speech..."
             ):
 
-                voice_text = voice_to_text(
-                    audio_value
+                text = voice_to_text(
+                    audio
                 )
 
-            if voice_text.startswith(
+            if text.startswith(
                 "Voice recognition error"
             ):
 
-                st.error(voice_text)
+                st.error(text)
 
             else:
 
                 st.success(
-                    "✅ Voice converted successfully."
+                    "✅ Speech converted."
+                )
+
+                st.session_state.voice_text = (
+                    text
                 )
 
                 st.text_area(
                     "Recognized text",
-                    voice_text,
-                    height=120,
+                    text,
+                    height=100
                 )
-
-                if st.button(
-                    "💬 Send to NOVA AI",
-                    use_container_width=True,
-                ):
-
-                    st.session_state.messages.append(
-                        {
-                            "role": "user",
-                            "content": voice_text,
-                        }
-                    )
-
-                    st.rerun()
 
 
 # ============================================================
@@ -852,121 +1035,131 @@ with voice_tab:
 
 with chat_tab:
 
-    st.subheader("💬 Chat with NOVA AI")
+    st.subheader(
+        "💬 Chat with NOVA AI"
+    )
 
-    # DOCUMENT CONTEXT
+    # Show previous messages
 
-    context_message = ""
+    for message in (
+        st.session_state.messages
+    ):
 
-    if st.session_state.uploaded_context:
+        with st.chat_message(
+            message["role"]
+        ):
 
-        context_message = (
-            "\n\nThe user uploaded these documents. "
-            "Use them when answering questions:\n\n"
-            + st.session_state.uploaded_context
-        )
+            st.markdown(
+                message["content"]
+            )
 
-    # DISPLAY CHAT HISTORY
+            if (
+                message["role"]
+                == "assistant"
+            ):
 
-    for message in st.session_state.messages:
-
-        role = message["role"]
-
-        content = message["content"]
-
-        with st.chat_message(role):
-
-            st.markdown(content)
-
-            if role == "assistant":
-
-                audio = text_to_speech(content)
+                audio = make_speech(
+                    message["content"]
+                )
 
                 if audio:
 
                     st.audio(
                         audio,
-                        format="audio/mp3",
+                        format="audio/mp3"
                     )
 
-    # CHAT INPUT
-
-    user_prompt = st.chat_input(
+    prompt = st.chat_input(
         "Message NOVA AI..."
     )
 
-    if user_prompt:
+    if prompt:
 
-        # USER MESSAGE
+        # User message
 
         st.session_state.messages.append(
             {
                 "role": "user",
-                "content": user_prompt,
+                "content": prompt
             }
         )
 
         with st.chat_message("user"):
-            st.markdown(user_prompt)
 
-        # PREPARE MESSAGES
+            st.markdown(prompt)
 
-        api_messages = []
+        # System prompt
 
         system_prompt = """
-You are NOVA AI, a helpful, intelligent and professional AI assistant.
+You are NOVA AI, a helpful and professional
+AI assistant.
 
-Rules:
-- Give clear and accurate answers.
-- Use simple explanations when appropriate.
-- For technical questions, provide practical steps.
-- Do not invent information.
-- If the user provides document context, use it.
-- If information is not present in the document, clearly say so.
+Answer clearly and accurately.
+
+If documents are provided, use them to
+answer the user's question.
+
+If the answer is not present in the
+documents, say that clearly.
+
+For technical questions, give practical
+step-by-step explanations.
 """
 
-        api_messages.append(
+        # Document context
+
+        if st.session_state.document_context:
+
+            system_prompt += (
+                "\n\nDOCUMENT CONTEXT:\n"
+                + st.session_state.document_context[
+                    :30000
+                ]
+            )
+
+        api_messages = [
             {
                 "role": "system",
                 "content": system_prompt
-                + context_message,
             }
-        )
+        ]
 
-        # KEEP CHAT HISTORY
+        # Last 20 messages
 
-        for message in st.session_state.messages[-20:]:
+        for message in (
+            st.session_state.messages[-20:]
+        ):
 
             api_messages.append(
                 {
                     "role": message["role"],
-                    "content": message["content"],
+                    "content": message["content"]
                 }
             )
 
-        # AI RESPONSE
+        # AI response
 
-        with st.chat_message("assistant"):
+        with st.chat_message(
+            "assistant"
+        ):
 
             with st.spinner(
                 "NOVA AI is thinking..."
             ):
 
-                answer = chat_with_ollama(
+                answer = ask_ollama(
                     selected_model,
                     api_messages,
-                    temperature,
+                    temperature
                 )
 
             st.markdown(answer)
 
-            st.session_state.last_response = answer
+            if not answer.startswith(
+                "❌"
+            ):
 
-            # TTS
-
-            if not answer.startswith("❌"):
-
-                audio = text_to_speech(
+                audio = make_speech(
                     answer
                 )
 
@@ -974,13 +1167,13 @@ Rules:
 
                     st.audio(
                         audio,
-                        format="audio/mp3",
+                        format="audio/mp3"
                     )
 
         st.session_state.messages.append(
             {
                 "role": "assistant",
-                "content": answer,
+                "content": answer
             }
         )
 
@@ -993,23 +1186,22 @@ if st.session_state.messages:
 
     st.divider()
 
-    chat_text = []
+    chat_content = []
 
-    for message in st.session_state.messages:
+    for message in (
+        st.session_state.messages
+    ):
 
-        role = message["role"].upper()
-
-        chat_text.append(
-            f"{role}:\n{message['content']}\n"
+        chat_content.append(
+            f"{message['role'].upper()}:\n"
+            f"{message['content']}\n"
         )
-
-    complete_chat = "\n".join(chat_text)
 
     st.download_button(
         "📥 Download Chat",
-        data=complete_chat,
+        "\n".join(chat_content),
         file_name=(
-            "nova_ai_chat_"
+            "NOVA_AI_"
             + datetime.now().strftime(
                 "%Y%m%d_%H%M%S"
             )
@@ -1027,7 +1219,7 @@ st.markdown(
     """
     <br>
     <div style="text-align:center;color:#6b7280;">
-        NOVA AI • Powered by Ollama • Streamlit
+        🤖 NOVA AI • Streamlit • Ollama
     </div>
     """,
     unsafe_allow_html=True,
