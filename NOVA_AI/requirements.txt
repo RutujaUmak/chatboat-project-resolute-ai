@@ -2,5 +2,7 @@ streamlit
 requests
 pypdf
 python-docx
-pillow
+Pillow
 pytesseract
+SpeechRecognition
+gTTS
