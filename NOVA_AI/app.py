@@ -41,12 +41,14 @@ st.markdown(
         font-weight: 800;
         text-align: center;
         margin-bottom: 0.2rem;
+        color: #ffffff !important;
     }
 
     .subtitle {
         text-align: center;
-        color: #9ca3af;
+        color: #d1d5db !important;
         margin-bottom: 2rem;
+        font-weight: 600 !important;
     }
 
     .status-box {
@@ -66,13 +68,56 @@ st.markdown(
     }
 
     .small-text {
-        color: #9ca3af;
+        color: #d1d5db !important;
         font-size: 0.85rem;
+        font-weight: 600 !important;
     }
 
+    /* ---------- FORCE BOLD WHITE TEXT IN MAIN AREA ---------- */
+    .stApp p, .stApp li,
+    .stApp h1, .stApp h2, .stApp h3,
+    .stApp h4, .stApp h5, .stApp h6,
+    .stApp span, .stApp label {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+
+    /* ---------- CHAT MESSAGES ---------- */
     div[data-testid="stChatMessage"] {
         border-radius: 16px;
         margin-bottom: 10px;
+        background: rgba(255, 255, 255, 0.08) !important;
+        padding: 14px 18px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    }
+
+    div[data-testid="stChatMessage"] p,
+    div[data-testid="stChatMessage"] li,
+    div[data-testid="stChatMessage"] span,
+    div[data-testid="stChatMessage"] div,
+    div[data-testid="stChatMessage"] strong {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
+        line-height: 1.6 !important;
+    }
+
+    /* ---------- SIDEBAR (light background, dark text) ---------- */
+    section[data-testid="stSidebar"] * {
+        color: #111827 !important;
+        font-weight: 600 !important;
+    }
+
+    /* ---------- CHAT INPUT ---------- */
+    textarea, input {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    /* ---------- TABS ---------- */
+    button[data-baseweb="tab"] {
+        color: #ffffff !important;
+        font-weight: 700 !important;
     }
     </style>
     """,
@@ -246,9 +291,7 @@ def extract_text_from_file(uploaded_file):
         if filename.endswith(".csv"):
             dataframe = pd.read_csv(uploaded_file)
 
-            return dataframe.to_csv(
-                index=False
-            )
+            return dataframe.to_csv(index=False)
 
         return ""
 
@@ -297,9 +340,7 @@ def image_to_base64(image):
 def analyze_image(model, image, instruction):
     """
     Sends image + instruction to Ollama.
-
-    This works only when the selected Ollama model supports
-    image/vision input.
+    Works only when the selected model supports vision.
     """
 
     if not OLLAMA_API_KEY:
@@ -353,11 +394,7 @@ def analyze_image(model, image, instruction):
 # CHAT WITH OLLAMA
 # ============================================================
 
-def chat_with_ollama(
-    model,
-    messages,
-    temperature,
-):
+def chat_with_ollama(model, messages, temperature):
     if not OLLAMA_API_KEY:
         return "❌ Ollama API key is missing."
 
@@ -417,10 +454,7 @@ def text_to_speech(text):
 
         audio_buffer = io.BytesIO()
 
-        tts = gTTS(
-            text=text,
-            lang="en",
-        )
+        tts = gTTS(text=text, lang="en")
 
         tts.write_to_fp(audio_buffer)
 
@@ -445,7 +479,6 @@ def voice_to_text(audio_file):
         audio_bytes = audio_file.read()
 
         with io.BytesIO(audio_bytes) as audio_stream:
-
             with sr.AudioFile(audio_stream) as source:
                 audio = recognizer.record(source)
 
@@ -473,7 +506,6 @@ with st.sidebar:
     st.divider()
 
     # API STATUS
-
     if OLLAMA_API_KEY:
         st.success("🟢 Ollama API configured")
     else:
@@ -489,7 +521,6 @@ with st.sidebar:
         )
 
     # MODEL LOADING
-
     if OLLAMA_API_KEY:
 
         with st.spinner("Loading Ollama models..."):
@@ -505,9 +536,7 @@ with st.sidebar:
 
         else:
 
-            st.error(
-                "❌ No models available."
-            )
+            st.error("❌ No models available.")
 
             if model_error:
                 st.caption(model_error)
@@ -518,7 +547,6 @@ with st.sidebar:
         st.stop()
 
     # TEMPERATURE
-
     temperature = st.slider(
         "🌡️ Creativity",
         min_value=0.0,
@@ -530,11 +558,7 @@ with st.sidebar:
     st.divider()
 
     # NEW CHAT
-
-    if st.button(
-        "➕ New Chat",
-        use_container_width=True,
-    ):
+    if st.button("➕ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.uploaded_context = ""
         st.session_state.uploaded_files = []
@@ -546,11 +570,7 @@ with st.sidebar:
         st.rerun()
 
     # CLEAR CHAT
-
-    if st.button(
-        "🗑️ Clear Chat",
-        use_container_width=True,
-    ):
+    if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.last_response = ""
 
@@ -559,7 +579,6 @@ with st.sidebar:
     st.divider()
 
     # FEATURES
-
     st.markdown("### ✨ Features")
 
     st.markdown(
@@ -617,14 +636,7 @@ with files_tab:
 
     uploaded_files = st.file_uploader(
         "Upload PDF, DOCX, TXT, CSV, MD or JSON",
-        type=[
-            "pdf",
-            "docx",
-            "txt",
-            "csv",
-            "md",
-            "json",
-        ],
+        type=["pdf", "docx", "txt", "csv", "md", "json"],
         accept_multiple_files=True,
     )
 
@@ -641,18 +653,13 @@ with files_tab:
             text = extract_text_from_file(file)
 
             if text:
-
                 all_text.append(
                     f"\n\n===== {file.name} =====\n\n{text}"
                 )
 
-        st.session_state.uploaded_context = (
-            "\n".join(all_text)
-        )
+        st.session_state.uploaded_context = "\n".join(all_text)
 
-        st.success(
-            f"✅ {len(uploaded_files)} file(s) processed."
-        )
+        st.success(f"✅ {len(uploaded_files)} file(s) processed.")
 
         st.info(
             "You can now ask questions about these documents in the Chat tab."
@@ -689,12 +696,7 @@ with image_tab:
 
     uploaded_image = st.file_uploader(
         "Upload an image",
-        type=[
-            "png",
-            "jpg",
-            "jpeg",
-            "webp",
-        ],
+        type=["png", "jpg", "jpeg", "webp"],
         key="image_uploader",
     )
 
@@ -707,7 +709,6 @@ with image_tab:
         col1, col2 = st.columns(2)
 
         with col1:
-
             st.image(
                 image,
                 caption=uploaded_image.name,
@@ -718,13 +719,9 @@ with image_tab:
 
             st.markdown("### 🔍 OCR")
 
-            if st.button(
-                "Extract Text",
-                use_container_width=True,
-            ):
+            if st.button("Extract Text", use_container_width=True):
 
                 with st.spinner("Running OCR..."):
-
                     ocr_result = perform_ocr(image)
 
                 st.session_state.ocr_text = ocr_result
@@ -758,14 +755,9 @@ with image_tab:
             height=100,
         )
 
-        if st.button(
-            "✨ Analyze Image",
-            use_container_width=True,
-        ):
+        if st.button("✨ Analyze Image", use_container_width=True):
 
-            with st.spinner(
-                "NOVA AI is analyzing the image..."
-            ):
+            with st.spinner("NOVA AI is analyzing the image..."):
 
                 image_answer = analyze_image(
                     selected_model,
@@ -790,40 +782,25 @@ with voice_tab:
         "Record your question and NOVA AI will convert it to text."
     )
 
-    audio_value = st.audio_input(
-        "🎤 Record your voice"
-    )
+    audio_value = st.audio_input("🎤 Record your voice")
 
     if audio_value:
 
-        st.audio(
-            audio_value
-        )
+        st.audio(audio_value)
 
-        if st.button(
-            "📝 Convert Voice to Text",
-            use_container_width=True,
-        ):
+        if st.button("📝 Convert Voice to Text", use_container_width=True):
 
-            with st.spinner(
-                "Converting speech to text..."
-            ):
+            with st.spinner("Converting speech to text..."):
 
-                voice_text = voice_to_text(
-                    audio_value
-                )
+                voice_text = voice_to_text(audio_value)
 
-            if voice_text.startswith(
-                "Voice recognition error"
-            ):
+            if voice_text.startswith("Voice recognition error"):
 
                 st.error(voice_text)
 
             else:
 
-                st.success(
-                    "✅ Voice converted successfully."
-                )
+                st.success("✅ Voice converted successfully.")
 
                 st.text_area(
                     "Recognized text",
@@ -831,10 +808,7 @@ with voice_tab:
                     height=120,
                 )
 
-                if st.button(
-                    "💬 Send to NOVA AI",
-                    use_container_width=True,
-                ):
+                if st.button("💬 Send to NOVA AI", use_container_width=True):
 
                     st.session_state.messages.append(
                         {
@@ -855,7 +829,6 @@ with chat_tab:
     st.subheader("💬 Chat with NOVA AI")
 
     # DOCUMENT CONTEXT
-
     context_message = ""
 
     if st.session_state.uploaded_context:
@@ -867,11 +840,9 @@ with chat_tab:
         )
 
     # DISPLAY CHAT HISTORY
-
     for message in st.session_state.messages:
 
         role = message["role"]
-
         content = message["content"]
 
         with st.chat_message(role):
@@ -883,22 +854,14 @@ with chat_tab:
                 audio = text_to_speech(content)
 
                 if audio:
-
-                    st.audio(
-                        audio,
-                        format="audio/mp3",
-                    )
+                    st.audio(audio, format="audio/mp3")
 
     # CHAT INPUT
-
-    user_prompt = st.chat_input(
-        "Message NOVA AI..."
-    )
+    user_prompt = st.chat_input("Message NOVA AI...")
 
     if user_prompt:
 
         # USER MESSAGE
-
         st.session_state.messages.append(
             {
                 "role": "user",
@@ -910,7 +873,6 @@ with chat_tab:
             st.markdown(user_prompt)
 
         # PREPARE MESSAGES
-
         api_messages = []
 
         system_prompt = """
@@ -928,13 +890,11 @@ Rules:
         api_messages.append(
             {
                 "role": "system",
-                "content": system_prompt
-                + context_message,
+                "content": system_prompt + context_message,
             }
         )
 
         # KEEP CHAT HISTORY
-
         for message in st.session_state.messages[-20:]:
 
             api_messages.append(
@@ -945,12 +905,9 @@ Rules:
             )
 
         # AI RESPONSE
-
         with st.chat_message("assistant"):
 
-            with st.spinner(
-                "NOVA AI is thinking..."
-            ):
+            with st.spinner("NOVA AI is thinking..."):
 
                 answer = chat_with_ollama(
                     selected_model,
@@ -963,19 +920,12 @@ Rules:
             st.session_state.last_response = answer
 
             # TTS
-
             if not answer.startswith("❌"):
 
-                audio = text_to_speech(
-                    answer
-                )
+                audio = text_to_speech(answer)
 
                 if audio:
-
-                    st.audio(
-                        audio,
-                        format="audio/mp3",
-                    )
+                    st.audio(audio, format="audio/mp3")
 
         st.session_state.messages.append(
             {
@@ -1010,9 +960,7 @@ if st.session_state.messages:
         data=complete_chat,
         file_name=(
             "nova_ai_chat_"
-            + datetime.now().strftime(
-                "%Y%m%d_%H%M%S"
-            )
+            + datetime.now().strftime("%Y%m%d_%H%M%S")
             + ".txt"
         ),
         mime="text/plain",
@@ -1026,7 +974,7 @@ if st.session_state.messages:
 st.markdown(
     """
     <br>
-    <div style="text-align:center;color:#6b7280;">
+    <div style="text-align:center;color:#9ca3af;font-weight:600;">
         NOVA AI • Powered by Ollama • Streamlit
     </div>
     """,
