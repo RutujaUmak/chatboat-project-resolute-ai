@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 🔑 YOUR API KEY AND CLOUD URL
+# 🔑 Ollama Cloud API settings
 OLLAMA_API_KEY = "35d039b439e24e429473186b126fa3d5.acNSTW1xEeqk2cmmnjlKq1yq"
 OLLAMA_URL = "https://ollama.com/api/chat"
 
@@ -29,29 +29,24 @@ st.markdown("""
 <style>
 
 /* ---------- APP ---------- */
-
 .stApp {
     background: #ffffff;
 }
 
 /* ---------- SIDEBAR ---------- */
-
 section[data-testid="stSidebar"] {
     background: #f7f7f8;
     border-right: 1px solid #e5e5e5;
 }
-
 section[data-testid="stSidebar"] .block-container {
     padding-top: 1.5rem;
 }
-
 .sidebar-logo {
     font-size: 24px;
     font-weight: 700;
     color: #111827;
     margin-bottom: 3px;
 }
-
 .sidebar-subtitle {
     color: #6b7280;
     font-size: 12px;
@@ -59,7 +54,6 @@ section[data-testid="stSidebar"] .block-container {
 }
 
 /* ---------- MAIN ---------- */
-
 .main-title {
     text-align: center;
     font-size: 32px;
@@ -67,7 +61,6 @@ section[data-testid="stSidebar"] .block-container {
     color: #111827;
     margin-top: 25px;
 }
-
 .main-subtitle {
     text-align: center;
     color: #6b7280;
@@ -76,7 +69,6 @@ section[data-testid="stSidebar"] .block-container {
 }
 
 /* ---------- WELCOME ---------- */
-
 .welcome-box {
     max-width: 850px;
     margin: 20px auto;
@@ -86,20 +78,17 @@ section[data-testid="stSidebar"] .block-container {
     background: #fafafa;
     text-align: center;
 }
-
 .welcome-title {
     font-size: 24px;
     font-weight: 600;
     color: #111827;
 }
-
 .welcome-text {
     color: #6b7280;
     margin-top: 8px;
 }
 
 /* ---------- FEATURE CARDS ---------- */
-
 .feature {
     padding: 18px;
     border: 1px solid #e5e7eb;
@@ -107,24 +96,20 @@ section[data-testid="stSidebar"] .block-container {
     background: white;
     min-height: 120px;
 }
-
 .feature-icon {
     font-size: 25px;
 }
-
 .feature-title {
     font-weight: 600;
     margin-top: 8px;
     color: #111827;
 }
-
 .feature-text {
     font-size: 13px;
     color: #6b7280;
 }
 
 /* ---------- CHAT ---------- */
-
 [data-testid="stChatMessage"] {
     max-width: 850px;
     margin-left: auto;
@@ -132,7 +117,6 @@ section[data-testid="stSidebar"] .block-container {
 }
 
 /* ---------- INPUT ---------- */
-
 [data-testid="stChatInput"] {
     max-width: 850px;
     margin-left: auto;
@@ -140,20 +124,17 @@ section[data-testid="stSidebar"] .block-container {
 }
 
 /* ---------- BUTTON ---------- */
-
 .stButton > button {
     border-radius: 10px;
     font-weight: 500;
 }
 
 /* ---------- FILE ---------- */
-
 [data-testid="stFileUploader"] {
     border-radius: 12px;
 }
 
 /* ---------- FOOTER ---------- */
-
 .footer {
     text-align: center;
     color: #9ca3af;
@@ -182,20 +163,11 @@ if "files" not in st.session_state:
 
 with st.sidebar:
 
-    st.markdown(
-        "🤖 **NOVA AI**"
-    )
-
-    st.caption(
-        "Your intelligent AI workspace"
-    )
-
+    st.markdown("🤖 **NOVA AI**")
+    st.caption("Your intelligent AI workspace")
     st.divider()
 
-    if st.button(
-        "➕ New chat",
-        use_container_width=True
-    ):
+    if st.button("➕ New chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
@@ -205,7 +177,20 @@ with st.sidebar:
 
     model = st.selectbox(
         "Ollama model",
-        ["llama3.2"],
+        [
+            "gemma4:31b",
+            "gpt-oss:20b",
+            "gpt-oss:120b",
+            "kimi-k2.7-code",
+            "deepseek-v4.1-flash",
+            "deepseek-v4-flash:0731",
+            "glm-5.3-flash",
+            "glm-5.3",
+            "minimax-m3",
+            "nemotron-3-super",
+            "qwen3.5:397b",
+            "mistral-large-3:675b",
+        ],
         label_visibility="collapsed"
     )
 
@@ -216,125 +201,67 @@ with st.sidebar:
     uploaded_files = st.file_uploader(
         "PDF, DOCX, TXT, CSV, Images",
         type=[
-            "pdf",
-            "docx",
-            "txt",
-            "csv",
-            "md",
-            "json",
-            "png",
-            "jpg",
-            "jpeg",
-            "webp"
+            "pdf", "docx", "txt", "csv", "md", "json",
+            "png", "jpg", "jpeg", "webp"
         ],
         accept_multiple_files=True
     )
 
     if uploaded_files:
-
         for file in uploaded_files:
-
             if file.name not in st.session_state.files:
-
                 filename = file.name.lower()
-
                 try:
-
                     if filename.endswith(".pdf"):
-
                         reader = PdfReader(file)
-
                         text = ""
-
                         for page in reader.pages:
                             page_text = page.extract_text()
-
                             if page_text:
                                 text += page_text + "\n"
 
                     elif filename.endswith(".docx"):
-
                         doc = Document(file)
+                        text = "\n".join(p.text for p in doc.paragraphs)
 
-                        text = "\n".join(
-                            p.text
-                            for p in doc.paragraphs
-                        )
-
-                    elif filename.endswith(
-                        (".png", ".jpg", ".jpeg", ".webp")
-                    ):
-
+                    elif filename.endswith((".png", ".jpg", ".jpeg", ".webp")):
                         image = Image.open(file)
-
-                        text = pytesseract.image_to_string(
-                            image
-                        )
+                        text = pytesseract.image_to_string(image)
 
                     else:
+                        text = file.read().decode("utf-8", errors="ignore")
 
-                        text = file.read().decode(
-                            "utf-8",
-                            errors="ignore"
-                        )
-
-                    st.session_state.files[
-                        file.name
-                    ] = text
+                    st.session_state.files[file.name] = text
 
                 except Exception as e:
+                    st.session_state.files[file.name] = f"File processing error: {e}"
 
-                    st.session_state.files[
-                        file.name
-                    ] = f"File processing error: {e}"
-
-        st.success(
-            f"{len(uploaded_files)} file(s) uploaded"
-        )
+        st.success(f"{len(uploaded_files)} file(s) uploaded")
 
     if st.session_state.files:
-
         st.markdown("### 📚 Your files")
-
         for filename in st.session_state.files:
-
-            st.caption(
-                f"📄 {filename}"
-            )
+            st.caption(f"📄 {filename}")
 
     st.divider()
 
-    if st.button(
-        "🗑️ Clear conversation",
-        use_container_width=True
-    ):
+    if st.button("🗑️ Clear conversation", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
     st.divider()
 
-    st.caption(
-        "🦙 Ollama Cloud • Llama 3.2"
-    )
-
-    st.caption(
-        "🔒 Secure API Connection"
-    )
+    st.caption("🦙 Ollama Cloud • Llama 3.2")
+    st.caption("🔒 Secure API Connection")
 
 
 # ============================================================
 # MAIN HEADER
 # ============================================================
 
+st.markdown('<div class="main-title">🤖 NOVA AI</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="main-title">🤖 NOVA AI</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="main-subtitle">'
-    'Your private AI assistant powered by Ollama'
-    '</div>',
+    '<div class="main-subtitle">Your private AI assistant powered by Ollama Cloud</div>',
     unsafe_allow_html=True
 )
 
@@ -348,16 +275,11 @@ if not st.session_state.messages:
     st.markdown(
         """
         <div class="welcome-box">
-
-        <div class="welcome-title">
-        👋 Welcome to NOVA AI
-        </div>
-
+        <div class="welcome-title">👋 Welcome to NOVA AI</div>
         <div class="welcome-text">
         Ask questions, upload documents, analyze images,
         write code, or start a conversation.
         </div>
-
         </div>
         """,
         unsafe_allow_html=True
@@ -369,18 +291,11 @@ if not st.session_state.messages:
         st.markdown(
             """
             <div class="feature">
-
             <div class="feature-icon">📚</div>
-
-            <div class="feature-title">
-            Document AI
-            </div>
-
+            <div class="feature-title">Document AI</div>
             <div class="feature-text">
-            Upload PDFs and documents
-            and ask questions about them.
+            Upload PDFs and documents and ask questions about them.
             </div>
-
             </div>
             """,
             unsafe_allow_html=True
@@ -390,18 +305,11 @@ if not st.session_state.messages:
         st.markdown(
             """
             <div class="feature">
-
             <div class="feature-icon">💻</div>
-
-            <div class="feature-title">
-            Coding Assistant
-            </div>
-
+            <div class="feature-title">Coding Assistant</div>
             <div class="feature-text">
-            Generate and explain Python,
-            SQL, C, C++ and more.
+            Generate and explain Python, SQL, C, C++ and more.
             </div>
-
             </div>
             """,
             unsafe_allow_html=True
@@ -411,18 +319,11 @@ if not st.session_state.messages:
         st.markdown(
             """
             <div class="feature">
-
             <div class="feature-icon">🎤</div>
-
-            <div class="feature-title">
-            Voice Assistant
-            </div>
-
+            <div class="feature-title">Voice Assistant</div>
             <div class="feature-text">
-            Record your voice and
-            interact with your AI assistant.
+            Record your voice and interact with your AI assistant.
             </div>
-
             </div>
             """,
             unsafe_allow_html=True
@@ -434,26 +335,17 @@ if not st.session_state.messages:
 # ============================================================
 
 for message in st.session_state.messages:
-
-    with st.chat_message(
-        message["role"]
-    ):
-
-        st.markdown(
-            message["content"]
-        )
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 
 # ============================================================
 # VOICE INPUT
 # ============================================================
 
-audio = st.audio_input(
-    "🎤 Voice input"
-)
+audio = st.audio_input("🎤 Voice input")
 
 if audio:
-
     st.info(
         "Voice recording received. "
         "Whisper speech-to-text can be connected next."
@@ -464,9 +356,7 @@ if audio:
 # CHAT INPUT
 # ============================================================
 
-prompt = st.chat_input(
-    "Message NOVA AI..."
-)
+prompt = st.chat_input("Message NOVA AI...")
 
 
 # ============================================================
@@ -476,10 +366,7 @@ prompt = st.chat_input(
 if prompt:
 
     st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt
-        }
+        {"role": "user", "content": prompt}
     )
 
     with st.chat_message("user"):
@@ -492,23 +379,13 @@ if prompt:
     file_context = ""
 
     if st.session_state.files:
-
-        file_context = (
-            "\n\nUploaded file information:\n"
-        )
-
-        for filename, content in (
-            st.session_state.files.items()
-        ):
-
-            file_context += (
-                f"\n--- {filename} ---\n"
-            )
-
+        file_context = "\n\nUploaded file information:\n"
+        for filename, content in st.session_state.files.items():
+            file_context += f"\n--- {filename} ---\n"
             file_context += content[:10000]
 
     # ------------------------------------------
-    # OLLAMA MESSAGES
+    # MESSAGES
     # ------------------------------------------
 
     messages = [
@@ -534,9 +411,7 @@ if prompt:
         }
     ]
 
-    messages.extend(
-        st.session_state.messages
-    )
+    messages.extend(st.session_state.messages)
 
     # ------------------------------------------
     # OLLAMA CLOUD API CALL
@@ -545,7 +420,6 @@ if prompt:
     with st.chat_message("assistant"):
 
         placeholder = st.empty()
-
         full_response = ""
 
         try:
@@ -566,7 +440,6 @@ if prompt:
             )
 
             if response.status_code != 200:
-
                 placeholder.error(
                     f"Ollama Cloud error: {response.status_code} - {response.text}"
                 )
@@ -578,47 +451,28 @@ if prompt:
                     if not line:
                         continue
 
-                    data = json.loads(
-                        line.decode("utf-8")
-                    )
+                    data = json.loads(line.decode("utf-8"))
 
-                    content = data.get(
-                        "message",
-                        {}
-                    ).get(
-                        "content",
-                        ""
-                    )
+                    content = data.get("message", {}).get("content", "")
 
                     full_response += content
 
-                    placeholder.markdown(
-                        full_response + "▌"
-                    )
+                    placeholder.markdown(full_response + "▌")
 
-                placeholder.markdown(
-                    full_response
-                )
+                placeholder.markdown(full_response)
 
                 st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": full_response
-                    }
+                    {"role": "assistant", "content": full_response}
                 )
 
         except requests.exceptions.ConnectionError:
-
             placeholder.error(
                 "❌ Could not connect to Ollama Cloud. "
                 "Please check your internet connection and API key."
             )
 
         except Exception as e:
-
-            placeholder.error(
-                f"❌ Error: {e}"
-            )
+            placeholder.error(f"❌ Error: {e}")
 
 
 # ============================================================
@@ -626,8 +480,6 @@ if prompt:
 # ============================================================
 
 st.markdown(
-    '<div class="footer">'
-    'NOVA AI • Ollama Cloud + Llama 3.2 • Secure API'
-    '</div>',
+    '<div class="footer">NOVA AI • Ollama Cloud • Secure API</div>',
     unsafe_allow_html=True
 )
