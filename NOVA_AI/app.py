@@ -17,7 +17,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
+# 🔑 YOUR API KEY AND CLOUD URL
+OLLAMA_API_KEY = "35d039b439e24e429473186b126fa3d5.acNSTW1xEeqk2cmmnjlKq1yq"
+OLLAMA_URL = "https://ollama.com/api/chat"
 
 # ============================================================
 # CSS
@@ -312,11 +314,11 @@ with st.sidebar:
     st.divider()
 
     st.caption(
-        "🦙 Ollama • Llama 3.2"
+        "🦙 Ollama Cloud • Llama 3.2"
     )
 
     st.caption(
-        "🔒 Local AI • No API key"
+        "🔒 Secure API Connection"
     )
 
 
@@ -537,7 +539,7 @@ if prompt:
     )
 
     # ------------------------------------------
-    # OLLAMA
+    # OLLAMA CLOUD API CALL
     # ------------------------------------------
 
     with st.chat_message("assistant"):
@@ -550,6 +552,10 @@ if prompt:
 
             response = requests.post(
                 OLLAMA_URL,
+                headers={
+                    "Authorization": f"Bearer {OLLAMA_API_KEY}",
+                    "Content-Type": "application/json"
+                },
                 json={
                     "model": model,
                     "messages": messages,
@@ -562,7 +568,7 @@ if prompt:
             if response.status_code != 200:
 
                 placeholder.error(
-                    f"Ollama error: {response.status_code}"
+                    f"Ollama Cloud error: {response.status_code} - {response.text}"
                 )
 
             else:
@@ -604,8 +610,8 @@ if prompt:
         except requests.exceptions.ConnectionError:
 
             placeholder.error(
-                "❌ Ollama is not running. "
-                "Start Ollama with `ollama serve`."
+                "❌ Could not connect to Ollama Cloud. "
+                "Please check your internet connection and API key."
             )
 
         except Exception as e:
@@ -621,7 +627,7 @@ if prompt:
 
 st.markdown(
     '<div class="footer">'
-    'NOVA AI • Ollama + Llama 3.2 • Local AI'
+    'NOVA AI • Ollama Cloud + Llama 3.2 • Secure API'
     '</div>',
     unsafe_allow_html=True
 )
